@@ -33,7 +33,13 @@ export default function RivenCard({ entry, onPickWeapon, onClearWeapon, onRefres
             <span className="badge badge--confirm">{riven.confidence === 'low' ? '低置信' : '待确认'}</span>
           )}
           {weapon && (
-            <button className="button button--icon" onClick={onRefresh} disabled={state.status === 'loading'} title="刷新报价">
+            <button
+              className="button button--icon"
+              onClick={onRefresh}
+              disabled={state.status === 'loading'}
+              title="刷新报价"
+              aria-label="刷新裂罅报价"
+            >
               ↻
             </button>
           )}

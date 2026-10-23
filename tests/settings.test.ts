@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, mergeSettings } from '../src/lib/settings'
+import { DEFAULT_SETTINGS, mergeSettings, validateSettings } from '../src/lib/settings'
 
 describe('mergeSettings', () => {
   it('returns defaults for missing config', () => {
@@ -22,5 +22,29 @@ describe('mergeSettings', () => {
 
   it('keeps null arcane rank meaning max rank', () => {
     expect(mergeSettings({ arcaneRank: null }).arcaneRank).toBeNull()
+  })
+})
+
+describe('validateSettings', () => {
+  it('accepts the defaults', () => {
+    expect(validateSettings(DEFAULT_SETTINGS)).toEqual({})
+  })
+
+  it('rejects non-http URLs and empty required fields', () => {
+    const errors = validateSettings({
+      ...DEFAULT_SETTINGS,
+      baseUrl: 'ftp://example.com',
+      model: '  ',
+      userAgent: '',
+    })
+    expect(errors.baseUrl).toBeTruthy()
+    expect(errors.model).toBeTruthy()
+    expect(errors.userAgent).toBeTruthy()
+  })
+
+  it('rejects out-of-range timeouts', () => {
+    expect(validateSettings({ ...DEFAULT_SETTINGS, timeoutSeconds: 5 }).timeoutSeconds).toBeTruthy()
+    expect(validateSettings({ ...DEFAULT_SETTINGS, timeoutSeconds: 601 }).timeoutSeconds).toBeTruthy()
+    expect(validateSettings({ ...DEFAULT_SETTINGS, timeoutSeconds: 30.5 }).timeoutSeconds).toBeTruthy()
   })
 })

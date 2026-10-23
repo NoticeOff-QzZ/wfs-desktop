@@ -853,6 +853,16 @@ a:hover {
   background: var(--panel-alt);
 }
 
+.field input[aria-invalid='true'] {
+  border-color: var(--sell);
+}
+
+.field__error {
+  margin: 0;
+  color: var(--sell);
+  font-size: 12px;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

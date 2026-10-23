@@ -20,11 +20,13 @@ export default function ParazonPicker({ items, open, onClose, onConfirm }: Props
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (open) {
-      setQuery('')
-      setSelected(new Set())
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
     }
-  }, [open])
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose, open])
 
   const groups = useMemo(
     () => groupParazonItems(filterParazonItems(items, query)),
@@ -49,10 +51,16 @@ export default function ParazonPicker({ items, open, onClose, onConfirm }: Props
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal modal--wide" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="modal modal--wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="parazon-title"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="modal__header">
-          <h2>选择安魂 / 效价卡</h2>
-          <button className="button button--icon" onClick={onClose}>
+          <h2 id="parazon-title">选择安魂 / 效价卡</h2>
+          <button className="button button--icon" onClick={onClose} aria-label="关闭候选面板">
             ×
           </button>
         </div>

@@ -49,3 +49,33 @@ export async function loadSettings(): Promise<AppSettings> {
 export async function saveSettings(settings: AppSettings): Promise<void> {
   await bridge.settingsSave(settings)
 }
+
+export type SettingsField = 'baseUrl' | 'model' | 'timeoutSeconds' | 'userAgent'
+export type SettingsErrors = Partial<Record<SettingsField, string>>
+
+export function validateSettings(settings: AppSettings): SettingsErrors {
+  const errors: SettingsErrors = {}
+
+  try {
+    const url = new URL(settings.baseUrl.trim())
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      errors.baseUrl = '只支持 http/https 地址'
+    }
+  } catch {
+    errors.baseUrl = '请输入有效的 Base URL'
+  }
+
+  if (!settings.model.trim()) errors.model = '模型名不能为空'
+
+  if (
+    !Number.isInteger(settings.timeoutSeconds) ||
+    settings.timeoutSeconds < 10 ||
+    settings.timeoutSeconds > 600
+  ) {
+    errors.timeoutSeconds = '超时必须是 10–600 的整数秒'
+  }
+
+  if (!settings.userAgent.trim()) errors.userAgent = 'User-Agent 不能为空'
+
+  return errors
+}

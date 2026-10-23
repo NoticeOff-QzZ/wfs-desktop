@@ -339,7 +339,13 @@ pub async fn vision_read(
         )
     })?;
 
-    Ok(sanitize(&parsed, &content))
+    let result = sanitize(&parsed, &content);
+    tracing::info!(
+        items = result.items.len(),
+        rivens = result.rivens.len(),
+        "vision_read completed"
+    );
+    Ok(result)
 }
 
 #[tauri::command]

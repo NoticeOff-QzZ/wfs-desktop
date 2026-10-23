@@ -26,7 +26,12 @@ npm install
 npm run desktop:dev      # 开发模式（Tauri 窗口）
 npm test                 # 领域逻辑单测
 npm run typecheck
+npm run lint             # ESLint
+npm run check            # 前端检查 + Rust fmt/clippy/test 全量门禁
 ```
+
+`npm run check` 会自动把 `%USERPROFILE%\.cargo\bin` 加入 PATH；首次使用需要已安装
+`rustfmt` 与 `clippy` 组件。
 
 ## 构建便携版
 
@@ -41,10 +46,13 @@ npm run desktop:build
 - **模型服务**：DeepSeek 预设（`https://api.deepseek.com` / `deepseek-flash`）或任意 OpenAI 兼容服务；可填 Base URL、模型名、超时。
 - **API Key**：保存在 Windows 凭据管理器（服务名 `wfs-desktop`）。前端只能设置/清除/查询状态，无法读回明文；配置文件与日志中都不会出现。
 - **查询偏好**：MOD 默认 rank 0，赋能默认满级 rank 5（可改）；warframe.market 的 User-Agent 可改。
+- **诊断信息**：设置页可导出 `data/diagnostics-<时间戳>.txt`，包含版本、平台、脱敏设置与最近日志。
 
 ## 数据目录
 
-便携优先：exe 同级的 `data\`（`settings.json`、`catalog.json`）。该目录不可写时回退 `%APPDATA%\wfs-desktop`。
+便携优先：exe 同级的 `data\`（`settings.json`、`catalog.json`、`logs\`）。该目录不可写时回退 `%APPDATA%\wfs-desktop`。
+
+日志按天滚动，保留 7 个文件；不会记录 API Key、图片 base64 或完整请求体。
 
 ## 已知限制
 

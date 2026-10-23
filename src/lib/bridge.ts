@@ -7,12 +7,17 @@ export interface ProviderTestResult {
   sample: string
 }
 
+export interface SecretStatus {
+  configured: boolean
+  error: string | null
+}
+
 // 所有触碰密钥/跨域的调用都走 Rust；渲染进程只拿到结果。
 export const bridge = {
   settingsLoad: () => invoke<AppSettings>('settings_load'),
   settingsSave: (settings: AppSettings) => invoke<void>('settings_save', { settings }),
 
-  secretStatus: () => invoke<boolean>('secret_status'),
+  secretStatus: () => invoke<SecretStatus>('secret_status'),
   secretSet: (key: string) => invoke<void>('secret_set', { key }),
   secretClear: () => invoke<void>('secret_clear'),
 
@@ -26,6 +31,10 @@ export const bridge = {
   dataWrite: (name: string, content: string) => invoke<void>('data_write', { name, content }),
   dataClear: (name: string) => invoke<void>('data_clear', { name }),
   dataDir: () => invoke<string>('data_dir'),
+
+  logEvent: (level: 'info' | 'warn' | 'error', event: string, detail: string) =>
+    invoke<void>('diagnostics_log', { level, event, detail }),
+  diagnosticsExport: () => invoke<string>('diagnostics_export'),
 }
 
 export function errorMessage(error: unknown): string {

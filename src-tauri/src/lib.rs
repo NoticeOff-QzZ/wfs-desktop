@@ -1,3 +1,4 @@
+mod logging;
 mod market;
 mod secret;
 mod settings;
@@ -5,6 +6,14 @@ mod vision;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let data_dir = settings::resolve_data_dir();
+    let _log_guard = logging::init(&data_dir);
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        data_dir = %data_dir.display(),
+        "wfs-desktop starting"
+    );
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -20,6 +29,8 @@ pub fn run() {
             vision::vision_read,
             vision::provider_test,
             market::market_get,
+            logging::diagnostics_log,
+            logging::diagnostics_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

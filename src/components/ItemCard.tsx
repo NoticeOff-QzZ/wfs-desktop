@@ -1,10 +1,4 @@
-import {
-  assetUrl,
-  itemDisplayName,
-  type CatalogItem,
-  type ItemEntry,
-  type QuoteState,
-} from '../types'
+import { assetUrl, itemDisplayName, type ItemEntry } from '../types'
 import { REQUIEM_SLUGS } from '../lib/parazon'
 import { openExternal } from '../lib/opener'
 

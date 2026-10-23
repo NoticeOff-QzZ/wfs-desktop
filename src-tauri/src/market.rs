@@ -44,6 +44,25 @@ async fn wait_for_market_slot() {
 
 #[tauri::command]
 pub async fn market_get(path: String) -> Result<Value, String> {
+    let started = Instant::now();
+    let result = market_get_inner(path.clone()).await;
+    match &result {
+        Ok(_) => tracing::debug!(
+            path = %path,
+            elapsed_ms = started.elapsed().as_millis(),
+            "market_get completed"
+        ),
+        Err(error) => tracing::warn!(
+            path = %path,
+            elapsed_ms = started.elapsed().as_millis(),
+            error = %error,
+            "market_get failed"
+        ),
+    }
+    result
+}
+
+async fn market_get_inner(path: String) -> Result<Value, String> {
     if !(path.starts_with("/v1/") || path.starts_with("/v2/")) || path.contains("..") {
         return Err(format!("非法接口路径：{path}"));
     }

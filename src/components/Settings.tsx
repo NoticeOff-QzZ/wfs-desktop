@@ -1,41 +1,66 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AppSettings } from '../types'
 import { bridge, errorMessage } from '../lib/bridge'
-import { DEEPSEEK_DEFAULTS, DEFAULT_SETTINGS } from '../lib/settings'
+import { revealPath } from '../lib/opener'
+import { DEEPSEEK_DEFAULTS, DEFAULT_SETTINGS, validateSettings } from '../lib/settings'
 
 interface Props {
   settings: AppSettings
   hasKey: boolean
+  keyError?: string | null
   onClose: () => void
   onSaved: (settings: AppSettings, hasKey: boolean) => void
   onClearCache: () => void
 }
 
-export default function Settings({ settings, hasKey, onClose, onSaved, onClearCache }: Props) {
+export default function Settings({ settings, hasKey, keyError, onClose, onSaved, onClearCache }: Props) {
   const [draft, setDraft] = useState<AppSettings>(settings)
   const [apiKey, setApiKey] = useState('')
   const [keyConfigured, setKeyConfigured] = useState(hasKey)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
   const patch = (value: Partial<AppSettings>) => setDraft((current) => ({ ...current, ...value }))
+  const errors = validateSettings(draft)
+  const hasErrors = Object.keys(errors).length > 0
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
 
   const save = async (): Promise<boolean> => {
     setSaving(true)
     setMessage(null)
     try {
+      if (hasErrors) {
+        setMessage({ kind: 'error', text: '请先修正标红的配置项' })
+        return false
+      }
       if (apiKey.trim()) {
         await bridge.secretSet(apiKey.trim())
         setKeyConfigured(true)
         setApiKey('')
       }
-      await bridge.settingsSave(draft)
-      onSaved(draft, keyConfigured || Boolean(apiKey.trim()))
+      const normalized: AppSettings = {
+        ...draft,
+        baseUrl: draft.baseUrl.trim(),
+        model: draft.model.trim(),
+        userAgent: draft.userAgent.trim(),
+      }
+      await bridge.settingsSave(normalized)
+      onSaved(normalized, keyConfigured || Boolean(apiKey.trim()))
       setMessage({ kind: 'ok', text: '已保存' })
       return true
     } catch (error) {
-      setMessage({ kind: 'error', text: `保存失败：${errorMessage(error)}` })
+      const text = `保存失败：${errorMessage(error)}`
+      setMessage({ kind: 'error', text })
+      void bridge.logEvent('error', 'settings_save_failed', text).catch(() => undefined)
       return false
     } finally {
       setSaving(false)
@@ -66,18 +91,40 @@ export default function Settings({ settings, hasKey, onClose, onSaved, onClearCa
       setKeyConfigured(false)
       setApiKey('')
       setMessage({ kind: 'ok', text: '已清除 API Key' })
-      onSaved(draft, false)
+      onSaved(settings, false)
     } catch (error) {
       setMessage({ kind: 'error', text: `清除失败：${errorMessage(error)}` })
     }
   }
 
+  const exportDiagnostics = async () => {
+    setExporting(true)
+    setMessage(null)
+    try {
+      const path = await bridge.diagnosticsExport()
+      await revealPath(path)
+      setMessage({ kind: 'ok', text: `诊断信息已导出：${path}` })
+    } catch (error) {
+      const text = `导出失败：${errorMessage(error)}`
+      setMessage({ kind: 'error', text })
+      void bridge.logEvent('error', 'diagnostics_export_failed', text).catch(() => undefined)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="modal__header">
-          <h2>设置</h2>
-          <button className="button button--icon" onClick={onClose}>
+          <h2 id="settings-title">设置</h2>
+          <button className="button button--icon" onClick={onClose} aria-label="关闭设置">
             ×
           </button>
         </div>
@@ -87,6 +134,7 @@ export default function Settings({ settings, hasKey, onClose, onSaved, onClearCa
           <p className="hint">
             Key 只保存在 Windows 凭据管理器里，不会写进配置文件，也不会出现在界面与日志中。
           </p>
+          {keyError && <p className="notice notice--error">读取凭据状态失败：{keyError}</p>}
 
           <div className="field">
             <label>服务预设</label>
@@ -114,7 +162,9 @@ export default function Settings({ settings, hasKey, onClose, onSaved, onClearCa
               value={draft.baseUrl}
               onChange={(event) => patch({ baseUrl: event.target.value })}
               placeholder="https://api.deepseek.com"
+              aria-invalid={Boolean(errors.baseUrl)}
             />
+            {errors.baseUrl && <p className="field__error">{errors.baseUrl}</p>}
           </div>
 
           <div className="field">
@@ -123,7 +173,9 @@ export default function Settings({ settings, hasKey, onClose, onSaved, onClearCa
               value={draft.model}
               onChange={(event) => patch({ model: event.target.value })}
               placeholder="deepseek-flash"
+              aria-invalid={Boolean(errors.model)}
             />
+            {errors.model && <p className="field__error">{errors.model}</p>}
           </div>
 
           <div className="field">
@@ -155,7 +207,9 @@ export default function Settings({ settings, hasKey, onClose, onSaved, onClearCa
               max={600}
               value={draft.timeoutSeconds}
               onChange={(event) => patch({ timeoutSeconds: Number(event.target.value) })}
+              aria-invalid={Boolean(errors.timeoutSeconds)}
             />
+            {errors.timeoutSeconds && <p className="field__error">{errors.timeoutSeconds}</p>}
           </div>
         </section>
 
@@ -194,7 +248,9 @@ export default function Settings({ settings, hasKey, onClose, onSaved, onClearCa
             <input
               value={draft.userAgent}
               onChange={(event) => patch({ userAgent: event.target.value })}
+              aria-invalid={Boolean(errors.userAgent)}
             />
+            {errors.userAgent && <p className="field__error">{errors.userAgent}</p>}
             <p className="hint">官方规则要求可识别的客户端标识，建议包含项目名与联系方式。</p>
           </div>
         </section>
@@ -204,6 +260,9 @@ export default function Settings({ settings, hasKey, onClose, onSaved, onClearCa
           <div className="field-row">
             <button className="button" onClick={onClearCache}>
               清空物品库缓存
+            </button>
+            <button className="button" onClick={() => void exportDiagnostics()} disabled={exporting}>
+              {exporting ? '导出中…' : '导出诊断信息'}
             </button>
             <button
               className="button"
@@ -225,7 +284,11 @@ export default function Settings({ settings, hasKey, onClose, onSaved, onClearCa
           <button className="button" onClick={test} disabled={testing || saving}>
             {testing ? '测试中…' : '测试连接'}
           </button>
-          <button className="button button--primary" onClick={() => void save()} disabled={saving}>
+          <button
+            className="button button--primary"
+            onClick={() => void save()}
+            disabled={saving || hasErrors}
+          >
             {saving ? '保存中…' : '保存'}
           </button>
         </div>

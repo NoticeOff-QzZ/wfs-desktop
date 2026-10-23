@@ -83,7 +83,9 @@ pub fn settings_save(settings: Settings) -> Result<(), String> {
     let dir = resolve_data_dir();
     fs::create_dir_all(&dir).map_err(|e| format!("创建数据目录失败：{e}"))?;
     let raw = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    fs::write(dir.join(SETTINGS_FILE), raw).map_err(|e| format!("写入设置失败：{e}"))
+    fs::write(dir.join(SETTINGS_FILE), raw).map_err(|e| format!("写入设置失败：{e}"))?;
+    tracing::info!("settings saved");
+    Ok(())
 }
 
 #[tauri::command]
