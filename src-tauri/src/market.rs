@@ -14,7 +14,9 @@ static MARKET_GATE: Mutex<Option<Instant>> = Mutex::new(None);
 async fn wait_for_market_slot() {
     loop {
         let wait = {
-            let mut last = MARKET_GATE.lock().unwrap_or_else(|error| error.into_inner());
+            let mut last = MARKET_GATE
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
             let now = Instant::now();
             match *last {
                 Some(previous) => {
@@ -73,7 +75,8 @@ pub async fn market_get(path: String) -> Result<Value, String> {
                 .map_err(|e| format!("解析 warframe.market 响应失败：{e}"));
         }
 
-        let retryable = status.as_u16() == 429 || status.as_u16() == 509 || status.is_server_error();
+        let retryable =
+            status.as_u16() == 429 || status.as_u16() == 509 || status.is_server_error();
         if retryable && attempt < 3 {
             tokio::time::sleep(Duration::from_millis(delay)).await;
             delay *= 2;
@@ -103,6 +106,8 @@ mod tests {
     #[tokio::test]
     async fn rejects_bad_paths() {
         assert!(super::market_get("/etc/passwd".to_string()).await.is_err());
-        assert!(super::market_get("/v2/../secret".to_string()).await.is_err());
+        assert!(super::market_get("/v2/../secret".to_string())
+            .await
+            .is_err());
     }
 }

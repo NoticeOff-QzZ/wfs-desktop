@@ -205,7 +205,10 @@ fn extract_json(text: &str) -> Option<Value> {
 
     let start = cleaned.find('{')?;
     let body = &cleaned[start..];
-    let cuts: Vec<usize> = body.match_indices('}').map(|(index, _)| index + 1).collect();
+    let cuts: Vec<usize> = body
+        .match_indices('}')
+        .map(|(index, _)| index + 1)
+        .collect();
 
     for cut in cuts.into_iter().rev() {
         let prefix = &body[..cut];
@@ -286,7 +289,11 @@ fn sanitize(value: &Value, raw: &str) -> VisionResult {
 }
 
 #[tauri::command]
-pub async fn vision_read(image_base64: String, mime: String, hint: String) -> Result<VisionResult, String> {
+pub async fn vision_read(
+    image_base64: String,
+    mime: String,
+    hint: String,
+) -> Result<VisionResult, String> {
     let settings = read_settings();
     let key = secret::get_key()?;
     if image_base64.trim().is_empty() {
@@ -302,7 +309,10 @@ pub async fn vision_read(image_base64: String, mime: String, hint: String) -> Re
     let prompt = if hint.trim().is_empty() {
         "请按要求识别这张截图，只输出 JSON。".to_string()
     } else {
-        format!("用户附言：{}。请按要求识别这张截图，只输出 JSON。", hint.trim())
+        format!(
+            "用户附言：{}。请按要求识别这张截图，只输出 JSON。",
+            hint.trim()
+        )
     };
 
     let body = json!({
@@ -322,8 +332,12 @@ pub async fn vision_read(image_base64: String, mime: String, hint: String) -> Re
 
     let http = client(settings.timeout_seconds)?;
     let content = post_chat(&http, &chat_url(&settings.base_url), &key, body).await?;
-    let parsed = extract_json(&content)
-        .ok_or_else(|| format!("模型返回的内容不是有效 JSON：{}", content.chars().take(200).collect::<String>()))?;
+    let parsed = extract_json(&content).ok_or_else(|| {
+        format!(
+            "模型返回的内容不是有效 JSON：{}",
+            content.chars().take(200).collect::<String>()
+        )
+    })?;
 
     Ok(sanitize(&parsed, &content))
 }
@@ -393,8 +407,11 @@ mod tests {
         }
 
         crate::secret::secret_set(key).expect("应当能写入凭据");
-        let image = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/test1.png"))
-            .expect("测试图片应当存在");
+        let image = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../testdata/test1.png"
+        ))
+        .expect("测试图片应当存在");
         let encoded = base64::engine::general_purpose::STANDARD.encode(image);
 
         let result = super::vision_read(encoded, "image/png".to_string(), String::new())
@@ -419,8 +436,11 @@ mod tests {
         }
 
         crate::secret::secret_set(key).expect("应当能写入凭据");
-        let image = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/requiem.png"))
-            .expect("安魂测试图应当存在");
+        let image = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../testdata/requiem.png"
+        ))
+        .expect("安魂测试图应当存在");
         let encoded = base64::engine::general_purpose::STANDARD.encode(image);
 
         let result = super::vision_read(encoded, "image/png".to_string(), String::new())
