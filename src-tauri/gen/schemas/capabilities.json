@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"WF 截图查价的主窗口权限","local":true,"windows":["main"],"permissions":["core:default"]}}
+{"default":{"identifier":"default","description":"WF 截图查价的主窗口权限","local":true,"windows":["main"],"permissions":["core:default","opener:default"]}}

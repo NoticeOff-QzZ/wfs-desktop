@@ -5,7 +5,7 @@ use std::path::PathBuf;
 const SETTINGS_FILE: &str = "settings.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     pub provider_preset: String,
     pub base_url: String,
@@ -116,4 +116,20 @@ pub fn data_clear(name: String) -> Result<(), String> {
 #[tauri::command]
 pub fn data_dir() -> Result<String, String> {
     Ok(resolve_data_dir().to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_fields_fall_back_to_defaults() {
+        let parsed: Settings = serde_json::from_str(r#"{"model":"custom-model"}"#).unwrap();
+        let defaults = Settings::default();
+
+        assert_eq!(parsed.model, "custom-model");
+        assert_eq!(parsed.base_url, defaults.base_url);
+        assert_eq!(parsed.timeout_seconds, defaults.timeout_seconds);
+        assert_eq!(parsed.user_agent, defaults.user_agent);
+    }
 }

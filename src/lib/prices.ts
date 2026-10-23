@@ -21,30 +21,8 @@ interface Envelope<T> {
 }
 
 const TTL_MS = 60_000
-const MIN_INTERVAL_MS = 350
 
 const cache = new Map<string, PriceQuote>()
-let tail: Promise<unknown> = Promise.resolve()
-let lastStartedAt = 0
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-/** 串行出站请求：warframe.market 的公开限流是 3 次/秒。 */
-function enqueue<T>(task: () => Promise<T>): Promise<T> {
-  const result = tail.then(async () => {
-    const wait = lastStartedAt + MIN_INTERVAL_MS - Date.now()
-    if (wait > 0) await sleep(wait)
-    lastStartedAt = Date.now()
-    return task()
-  })
-  tail = result.then(
-    () => undefined,
-    () => undefined,
-  )
-  return result
-}
 
 export function mapOrder(raw: RawOrder, type: 'sell' | 'buy'): Order | null {
   if (!raw?.id || !Number.isFinite(Number(raw.platinum))) return null
@@ -84,8 +62,8 @@ export function sortOrders(sell: Order[], buy: Order[]): { sell: Order[]; buy: O
 }
 
 async function fetchTopOrders(slug: string, rank: number): Promise<PriceQuote> {
-  const envelope = (await enqueue(() =>
-    bridge.marketGet(`/v2/orders/item/${encodeURIComponent(slug)}/top?rank=${rank}`),
+  const envelope = (await bridge.marketGet(
+    `/v2/orders/item/${encodeURIComponent(slug)}/top?rank=${rank}`,
   )) as Envelope<{ sell?: RawOrder[]; buy?: RawOrder[] }>
 
   const rawSell = Array.isArray(envelope?.data?.sell) ? envelope.data.sell : []

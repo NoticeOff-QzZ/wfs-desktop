@@ -137,6 +137,25 @@ export interface WeaponResolution {
   certain: boolean
 }
 
+export interface ItemEntry {
+  key: string
+  item: CatalogItem
+  rank: number
+  count: number
+  state: QuoteState
+  source: 'vision' | 'manual'
+}
+
+export interface RivenEntry {
+  key: string
+  riven: VisionRiven
+  positiveSlugs: string[]
+  tokenLabels: string[]
+  candidates: WeaponResolution[]
+  weapon: WeaponResolution | null
+  state: RivenPriceState
+}
+
 export interface CatalogSnapshot {
   schema: number
   version: string

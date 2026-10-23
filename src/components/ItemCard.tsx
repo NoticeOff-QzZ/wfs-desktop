@@ -2,17 +2,11 @@ import {
   assetUrl,
   itemDisplayName,
   type CatalogItem,
+  type ItemEntry,
   type QuoteState,
 } from '../types'
 import { REQUIEM_SLUGS } from '../lib/parazon'
-
-export interface ItemEntry {
-  key: string
-  item: CatalogItem
-  rank: number
-  state: QuoteState
-  source: 'vision' | 'manual'
-}
+import { openExternal } from '../lib/opener'
 
 interface Props {
   entry: ItemEntry
@@ -35,7 +29,14 @@ export default function ItemCard({ entry, onRefresh, onRemove }: Props) {
       <div className="card__header">
         {thumb ? <img className="card__thumb" src={thumb} alt="" /> : <span className="card__thumb card__thumb--empty" />}
         <div className="card__names">
-          <a href={`https://warframe.market/items/${item.slug}`} target="_blank" rel="noreferrer">
+          <a
+            href={`https://warframe.market/items/${item.slug}`}
+            rel="noreferrer"
+            onClick={(event) => {
+              event.preventDefault()
+              void openExternal(`https://warframe.market/items/${item.slug}`)
+            }}
+          >
             {itemDisplayName(item)}
           </a>
           <em>
@@ -50,13 +51,20 @@ export default function ItemCard({ entry, onRefresh, onRemove }: Props) {
             </span>
           )}
           {rankText(entry) && <span className="badge badge--manual">{rankText(entry)}</span>}
+          {entry.count > 1 && <span className="badge badge--manual">×{entry.count}</span>}
           <span className={`badge ${entry.source === 'vision' ? 'badge--auto' : 'badge--manual'}`}>
             {entry.source === 'vision' ? '截图识别' : '手动添加'}
           </span>
-          <button className="button button--icon" onClick={onRefresh} disabled={state.status === 'loading'} title="刷新报价">
+          <button
+            className="button button--icon"
+            onClick={onRefresh}
+            disabled={state.status === 'loading'}
+            title="刷新报价"
+            aria-label="刷新报价"
+          >
             ↻
           </button>
-          <button className="button button--icon" onClick={onRemove} title="移除">
+          <button className="button button--icon" onClick={onRemove} title="移除" aria-label="移除物品">
             ×
           </button>
         </div>
@@ -124,6 +132,11 @@ export default function ItemCard({ entry, onRefresh, onRemove }: Props) {
             <p className="hint">
               以上为 {rank === 0 ? '未升级 rank 0' : `rank ${rank}`} 的报价
               {rank === maxRank ? `（满级）` : `，满级为 rank ${maxRank}`}。
+            </p>
+          )}
+          {entry.count > 1 && state.quote.summary.minSell !== null && (
+            <p className="hint">
+              数量 ×{entry.count}，按最低卖价估算总价 {state.quote.summary.minSell * entry.count}p。
             </p>
           )}
         </>

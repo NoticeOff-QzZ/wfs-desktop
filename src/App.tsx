@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DropZone from './components/DropZone'
 import Header from './components/Header'
-import ItemCard, { type ItemEntry } from './components/ItemCard'
+import ItemCard from './components/ItemCard'
 import ItemSearchBox from './components/ItemSearchBox'
 import ParazonPicker from './components/ParazonPicker'
-import RivenCard, { type RivenEntry } from './components/RivenCard'
+import RivenCard from './components/RivenCard'
 import ScreenshotPreview from './components/ScreenshotPreview'
 import Settings from './components/Settings'
 import { bridge, errorMessage } from './lib/bridge'
@@ -12,16 +12,15 @@ import { loadCatalog, type LoadedCatalog } from './lib/catalog'
 import { buildRivenVocabulary } from './lib/rivenVocabulary'
 import { clearRivenCache, getRivenPrices } from './lib/auctions'
 import { clearQuoteCache, getQuote } from './lib/prices'
-import { resolveItemRank } from './lib/rank'
-import { DEFAULT_SETTINGS, loadSettings, saveSettings } from './lib/settings'
+import { DEFAULT_SETTINGS, loadSettings } from './lib/settings'
 import { normalizeName } from './lib/normalize'
 import { decodePositiveSlugs, resolveWeapons } from './lib/weapons'
-import type { AppSettings, CatalogItem, WeaponResolution } from './types'
+import { addManualItems, AUTO_THRESHOLD, buildItemEntries, SUGGEST_THRESHOLD } from './lib/entries'
+import { shouldOpenParazonPicker } from './lib/analysis'
+import type { AppSettings, CatalogItem, ItemEntry, RivenEntry, WeaponResolution } from './types'
 import { itemDisplayName } from './types'
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
-const AUTO_THRESHOLD = 0.86
-const SUGGEST_THRESHOLD = 0.6
 
 interface Notice {
   kind: 'info' | 'error'
@@ -63,6 +62,8 @@ export default function App() {
 
   const settingsRef = useRef<AppSettings | null>(null)
   settingsRef.current = settings
+  const analysisSeqRef = useRef(0)
+  const pendingAnalysisRef = useRef<{ dataUrl: string; mime: string } | null>(null)
 
   const vocabulary = useMemo(
     () => (catalog ? buildRivenVocabulary(catalog.rivenAttributes) : null),
@@ -137,10 +138,17 @@ export default function App() {
   )
 
   const analyze = useCallback(
-    async (dataUrl: string, mime: string) => {
+    async (dataUrl: string, mime: string, requestId: number) => {
+      const isCurrent = () => requestId === analysisSeqRef.current
+      if (!isCurrent()) return
+
       const current = settingsRef.current
       const loadedCatalog = catalog
-      if (!current) return
+      if (!current) {
+        setSettingsOpen(true)
+        setNotice({ kind: 'error', text: '设置还没加载好，请稍后重试。' })
+        return
+      }
       if (!loadedCatalog) {
         setNotice({ kind: 'error', text: '物品库还没加载好，请稍后重试。' })
         return
@@ -150,9 +158,11 @@ export default function App() {
       setNotice(null)
       setItems([])
       setRivens([])
+      setPickerOpen(false)
       try {
         const base64 = dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl
         const vision = await bridge.visionRead(base64, mime, '')
+        if (!isCurrent()) return
 
         const family = vision.family ?? ''
         if (family === 'parazon') {
@@ -165,33 +175,22 @@ export default function App() {
         }
 
         if (vision.items.length === 0 && vision.rivens.length === 0) {
+          const openPicker = shouldOpenParazonPicker(vision)
           setNotice({
             kind: 'info',
             text: vision.notes
-              ? `没有认出物品：${vision.notes}。可以试试下方的安魂 / 效价候选。`
-              : '没有认出物品。可以裁切到只有物品名再试，或用下方的安魂 / 效价候选手动选择。',
+              ? `没有认出物品：${vision.notes}。${openPicker ? '可以试试下方的安魂 / 效价候选。' : '可以手动搜索物品，或点“从候选里选”。'}`
+              : `没有认出物品。${openPicker ? '可以试试下方的安魂 / 效价候选。' : '可以裁切到只有物品名再试，或手动搜索物品。'}`,
           })
-          setPickerOpen(true)
+          setPickerOpen(openPicker)
           return
         }
 
-        const unresolved: string[] = []
-        const itemEntries: ItemEntry[] = []
-        for (const [index, entry] of vision.items.entries()) {
-          const [best] = loadedCatalog.index.search(entry.name, 1)
-          if (!best || best.score < SUGGEST_THRESHOLD) {
-            unresolved.push(entry.name)
-            continue
-          }
-          const rank = resolveItemRank(best.item, current)
-          itemEntries.push({
-            key: `item:${best.item.id}:${rank}:${index}`,
-            item: best.item,
-            rank,
-            state: { status: 'loading' },
-            source: 'vision',
-          })
-        }
+        const { entries: itemEntries, unresolved } = buildItemEntries(
+          vision.items,
+          loadedCatalog.index,
+          current,
+        )
 
         const rivenEntries: RivenEntry[] = vision.rivens.map((riven, index) => {
           const positiveSlugs = vocabulary
@@ -227,9 +226,10 @@ export default function App() {
           if (entry.weapon) void refreshRiven(entry.key, entry.weapon, entry.positiveSlugs)
         }
       } catch (error) {
+        if (!isCurrent()) return
         setNotice({ kind: 'error', text: friendlyVisionError(error) })
       } finally {
-        setBusy(null)
+        if (isCurrent()) setBusy(null)
       }
     },
     [attributeNames, attributeSlugByName, catalog, refreshItem, refreshRiven, vocabulary],
@@ -237,6 +237,8 @@ export default function App() {
 
   const handleFile = useCallback(
     async (file: File) => {
+      const requestId = ++analysisSeqRef.current
+
       if (!file.type.startsWith('image/')) {
         setNotice({ kind: 'error', text: '只支持图片文件（png / jpg / webp / gif）。' })
         return
@@ -251,14 +253,18 @@ export default function App() {
 
       try {
         const dataUrl = await readAsDataUrl(file)
+        if (requestId !== analysisSeqRef.current) return
         setImage({ dataUrl, name: file.name || '剪贴板图片' })
         if (!hasKey) {
+          pendingAnalysisRef.current = { dataUrl, mime: file.type }
           setSettingsOpen(true)
           setNotice({ kind: 'error', text: '先配置 API Key 才能识别截图。' })
           return
         }
-        await analyze(dataUrl, file.type)
+        pendingAnalysisRef.current = null
+        await analyze(dataUrl, file.type, requestId)
       } catch (error) {
+        if (requestId !== analysisSeqRef.current) return
         setNotice({ kind: 'error', text: errorMessage(error) })
       }
     },
@@ -280,26 +286,24 @@ export default function App() {
     return () => window.removeEventListener('paste', onPaste)
   }, [handleFile])
 
-  const addManual = useCallback(
-    (item: CatalogItem) => {
+  const addManualMany = useCallback(
+    (selected: CatalogItem[]) => {
       const current = settingsRef.current
       if (!current) return
-      const rank = resolveItemRank(item, current)
-      setItems((previous) => {
-        const exists = previous.find((entry) => entry.item.slug === item.slug && entry.rank === rank)
-        if (exists) return previous
-        const entry: ItemEntry = {
-          key: `item:${item.id}:${rank}:manual`,
-          item,
-          rank,
-          state: { status: 'loading' },
-          source: 'manual',
-        }
-        void refreshItem(entry)
-        return [...previous, entry]
-      })
+
+      const results = addManualItems(items, selected, current)
+      const next = results.at(-1)?.entries ?? items
+      setItems(next)
+      for (const result of results) {
+        if (result.created) void refreshItem(result.created)
+      }
     },
-    [refreshItem],
+    [items, refreshItem],
+  )
+
+  const addManual = useCallback(
+    (item: CatalogItem) => addManualMany([item]),
+    [addManualMany],
   )
 
   const pickWeapon = useCallback(
@@ -410,7 +414,7 @@ export default function App() {
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onConfirm={(selected) => {
-          for (const item of selected) addManual(item)
+          addManualMany(selected)
           setPickerOpen(false)
         }}
       />
@@ -421,9 +425,15 @@ export default function App() {
           hasKey={hasKey}
           onClose={() => setSettingsOpen(false)}
           onSaved={(next, nextHasKey) => {
+            settingsRef.current = next
             setSettings(next)
             setHasKey(nextHasKey)
-            void saveSettings(next).catch(() => undefined)
+            const pending = pendingAnalysisRef.current
+            if (nextHasKey && pending) {
+              pendingAnalysisRef.current = null
+              const requestId = ++analysisSeqRef.current
+              void analyze(pending.dataUrl, pending.mime, requestId)
+            }
           }}
           onClearCache={() => void clearCache()}
         />

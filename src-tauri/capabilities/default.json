@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "WF 截图查价的主窗口权限",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "opener:default"]
 }

@@ -1,9 +1,44 @@
 use serde_json::Value;
-use std::time::Duration;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use crate::settings::read_settings;
 
 const BASE: &str = "https://api.warframe.market";
+const MIN_INTERVAL: Duration = Duration::from_millis(350);
+
+static MARKET_GATE: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// warframe.market 的公开限流是 3 次/秒。所有请求（含重试）都先经过这个
+/// 全局时间闸门，避免前端多路并发时触发 429。
+async fn wait_for_market_slot() {
+    loop {
+        let wait = {
+            let mut last = MARKET_GATE.lock().unwrap_or_else(|error| error.into_inner());
+            let now = Instant::now();
+            match *last {
+                Some(previous) => {
+                    let elapsed = now.saturating_duration_since(previous);
+                    if elapsed >= MIN_INTERVAL {
+                        *last = Some(now);
+                        None
+                    } else {
+                        Some(MIN_INTERVAL - elapsed)
+                    }
+                }
+                None => {
+                    *last = Some(now);
+                    None
+                }
+            }
+        };
+
+        match wait {
+            Some(delay) => tokio::time::sleep(delay).await,
+            None => return,
+        }
+    }
+}
 
 #[tauri::command]
 pub async fn market_get(path: String) -> Result<Value, String> {
@@ -20,6 +55,7 @@ pub async fn market_get(path: String) -> Result<Value, String> {
 
     let mut delay = 1000u64;
     for attempt in 0..4 {
+        wait_for_market_slot().await;
         let response = client
             .get(&url)
             .header("Accept", "application/json")

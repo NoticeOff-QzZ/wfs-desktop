@@ -107,20 +107,25 @@ async fn post_chat(
     key: &str,
     mut body: Value,
 ) -> Result<String, String> {
-    for attempt in 0..2 {
-        let response = client
-            .post(url)
-            .bearer_auth(key)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
+    let mut retry_used = false;
+    let mut fallback_used = false;
+
+    loop {
+        let response = match client.post(url).bearer_auth(key).json(&body).send().await {
+            Ok(response) => response,
+            Err(error) => {
+                if !retry_used && (error.is_timeout() || error.is_connect()) {
+                    retry_used = true;
+                    tokio::time::sleep(Duration::from_millis(800)).await;
+                    continue;
+                }
+                return Err(if error.is_timeout() {
                     "模型请求超时，检查网络或在设置里调大超时时间。".to_string()
                 } else {
-                    format!("请求模型失败：{e}")
-                }
-            })?;
+                    format!("请求模型失败：{error}")
+                });
+            }
+        };
 
         let status = response.status();
         let text = response.text().await.unwrap_or_default();
@@ -135,8 +140,15 @@ async fn post_chat(
             return Ok(content);
         }
 
+        if status.is_server_error() && !retry_used {
+            retry_used = true;
+            tokio::time::sleep(Duration::from_millis(800)).await;
+            continue;
+        }
+
         // 有些 OpenAI 兼容服务不支持 thinking / response_format，400 时降级重试。
-        if status == reqwest::StatusCode::BAD_REQUEST && attempt == 0 {
+        if status == reqwest::StatusCode::BAD_REQUEST && !fallback_used {
+            fallback_used = true;
             if let Some(object) = body.as_object_mut() {
                 object.remove("thinking");
                 object.remove("response_format");
@@ -146,8 +158,6 @@ async fn post_chat(
 
         return Err(error_for_status(status, &text));
     }
-
-    Err("模型请求失败".to_string())
 }
 
 /// 把被截断的 JSON 括号补完。

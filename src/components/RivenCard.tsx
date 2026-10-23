@@ -1,15 +1,5 @@
-import type { RivenPriceState, VisionRiven, WeaponResolution } from '../types'
+import type { RivenEntry, WeaponResolution } from '../types'
 import { itemDisplayName } from '../types'
-
-export interface RivenEntry {
-  key: string
-  riven: VisionRiven
-  positiveSlugs: string[]
-  tokenLabels: string[]
-  candidates: WeaponResolution[]
-  weapon: WeaponResolution | null
-  state: RivenPriceState
-}
 
 interface Props {
   entry: RivenEntry
