@@ -1,50 +1,77 @@
 import { useRef, useState } from 'react'
 
 interface Props {
-  onFile: (file: File) => void
+  onFiles: (files: File[]) => void
   hasImage: boolean
+  remaining: number
+  disabled: boolean
 }
 
-export default function DropZone({ onFile, hasImage }: Props) {
+export default function DropZone({ onFiles, hasImage, remaining, disabled }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const unavailable = disabled || remaining <= 0
 
-  const pick = (file: File | undefined) => {
-    if (file) onFile(file)
+  const pick = (files: FileList | null) => {
+    if (unavailable || !files || files.length === 0) return
+    onFiles(Array.from(files))
   }
 
   return (
     <div
-      className={`dropzone${dragging ? ' dropzone--active' : ''}`}
+      className={`dropzone${dragging ? ' dropzone--active' : ''}${unavailable ? ' dropzone--disabled' : ''}`}
       onDragOver={(event) => {
+        if (unavailable) return
         event.preventDefault()
         setDragging(true)
       }}
       onDragLeave={() => setDragging(false)}
       onDrop={(event) => {
+        if (unavailable) return
         event.preventDefault()
         setDragging(false)
-        pick(Array.from(event.dataTransfer.files).find((candidate) => candidate.type.startsWith('image/')))
+        pick(event.dataTransfer.files)
       }}
-      onClick={() => inputRef.current?.click()}
+      onClick={() => {
+        if (!unavailable) inputRef.current?.click()
+      }}
       role="button"
-      tabIndex={0}
+      tabIndex={unavailable ? -1 : 0}
+      aria-disabled={unavailable}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') inputRef.current?.click()
+        if (!unavailable && (event.key === 'Enter' || event.key === ' ')) {
+          inputRef.current?.click()
+        }
       }}
     >
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
+        multiple
+        disabled={unavailable}
         hidden
         onChange={(event) => {
-          pick(event.target.files?.[0])
+          pick(event.target.files)
           event.target.value = ''
         }}
       />
-      <strong>{hasImage ? '换一张截图' : '在这里粘贴截图'}</strong>
-      <span>Ctrl + V 粘贴，或拖拽图片到此处，也可以点击选择文件</span>
+      <strong>
+        {disabled
+          ? '查询进行中，暂不能调整截图'
+          : remaining <= 0
+            ? '已上传 3 张截图'
+            : hasImage
+              ? `继续添加截图（还可添加 ${remaining} 张）`
+              : '在这里粘贴或拖入截图'}
+      </strong>
+      <span>
+        {disabled
+          ? '请先中止当前查询'
+          : remaining <= 0
+            ? '移除一张后可继续添加'
+            : '支持一次选择多张，最多 3 张；添加后点击“开始查询”'}
+      </span>
     </div>
   )
 }

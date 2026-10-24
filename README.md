@@ -1,6 +1,8 @@
 # WF 截图查价（Windows 桌面版）
 
-Tauri 2 + React + TypeScript 的 Windows 便携应用：粘贴 / 拖拽 / 选择一张 Warframe 截图，调用第三方视觉模型识别物品与裂罅，再查 warframe.market 行情。
+Tauri 2 + React + TypeScript 的 Windows 便携应用：粘贴 / 拖拽 / 选择最多 3 张 Warframe 截图，点击查询后按图片顺序调用第三方视觉模型识别物品与裂罅，再查 warframe.market 行情。
+
+截图队列支持拖动排序、移除和追加；查询过程中可点击「中止查询」停止后续图片与报价请求。
 
 不依赖 QQ、Codex CLI 或 warframe-mcp，安装后只需配置一个 OpenAI 兼容的视觉模型 API Key。
 

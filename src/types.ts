@@ -22,6 +22,13 @@ export interface VisionResult {
   raw: string
 }
 
+export interface UploadedImage {
+  id: string
+  dataUrl: string
+  name: string
+  mime: string
+}
+
 export interface CatalogItem {
   id: string
   slug: string

@@ -14,7 +14,7 @@ export default function Header({ catalogCount, origin, hasKey, loading, onRefres
         <div className="header__logo">WF</div>
         <div>
           <h1 className="header__title">WF 截图查价</h1>
-          <p className="header__subtitle">粘贴截图 → 识别物品 / 裂罅 → warframe.market 实时行情</p>
+          <p className="header__subtitle">最多 3 张截图 → 按顺序识别物品 / 裂罅 → warframe.market 实时行情</p>
         </div>
       </div>
 

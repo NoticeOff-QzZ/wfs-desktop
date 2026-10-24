@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import DropZone from './components/DropZone'
 import Header from './components/Header'
+import ImageQueue from './components/ImageQueue'
 import ItemCard from './components/ItemCard'
 import ItemSearchBox from './components/ItemSearchBox'
 import ParazonPicker from './components/ParazonPicker'
 import RivenCard from './components/RivenCard'
-import ScreenshotPreview from './components/ScreenshotPreview'
 import Settings from './components/Settings'
 import { useAnalysis } from './hooks/useAnalysis'
 import { useCatalog } from './hooks/useCatalog'
 import { useSettings } from './hooks/useSettings'
 import { bridge } from './lib/bridge'
 import { DEFAULT_SETTINGS } from './lib/settings'
+import { MAX_IMAGES } from './lib/uploads'
 
 export default function App() {
   const catalogState = useCatalog()
@@ -36,7 +37,7 @@ export default function App() {
     applySaved,
   } = settingsState
   const {
-    image,
+    images,
     items,
     rivens,
     busy,
@@ -45,7 +46,11 @@ export default function App() {
     setPickerOpen,
     setNotice,
     setItems,
-    handleFile,
+    addFiles,
+    removeImage,
+    moveImage,
+    startQuery,
+    cancelQuery,
     addManual,
     addManualMany,
     pickWeapon,
@@ -94,7 +99,41 @@ export default function App() {
 
       <main className="layout">
         <section className="panel">
-          <DropZone onFile={(file) => void handleFile(file)} hasImage={Boolean(image)} />
+          <DropZone
+            onFiles={(files) => void addFiles(files)}
+            hasImage={images.length > 0}
+            remaining={MAX_IMAGES - images.length}
+            disabled={Boolean(busy)}
+          />
+
+          <ImageQueue
+            images={images}
+            disabled={Boolean(busy)}
+            onRemove={removeImage}
+            onMove={moveImage}
+          />
+
+          <div className="query-actions">
+            <span className="hint">
+              {images.length === 0
+                ? '添加截图后点击“开始查询”'
+                : `将按 1 → ${images.length} 的顺序逐张识别并查价`}
+            </span>
+            <div className="query-actions__buttons">
+              {busy && (
+                <button className="button button--danger" onClick={cancelQuery}>
+                  中止查询
+                </button>
+              )}
+              <button
+                className="button button--primary"
+                onClick={() => void startQuery()}
+                disabled={Boolean(busy) || images.length === 0}
+              >
+                开始查询
+              </button>
+            </div>
+          </div>
 
           {busy && (
             <div className="progress">
@@ -107,15 +146,13 @@ export default function App() {
 
           {notice && <p className={`notice ${notice.kind === 'error' ? 'notice--error' : ''}`}>{notice.text}</p>}
           {catalogError && <p className="notice notice--error">物品库加载失败：{catalogError}</p>}
-
-          <ScreenshotPreview image={image ? { url: image.dataUrl, name: image.name } : null} />
         </section>
 
         <section className="panel">
           <ItemSearchBox index={catalog?.index ?? null} onSelect={addManual} />
           <div className="toolbar">
             <span className="hint">安魂 / 效价卡没有文字，认不出？</span>
-            <button className="button" onClick={() => setPickerOpen(true)}>
+            <button className="button" onClick={() => setPickerOpen(true)} disabled={Boolean(busy)}>
               从候选里选
             </button>
           </div>

@@ -8,6 +8,8 @@ export const AUTO_THRESHOLD = 0.86
 export interface BuildItemEntriesResult {
   entries: ItemEntry[]
   unresolved: string[]
+  /** 每张物品卡首次出现时所属的截图序号，用于让查价顺序跟随上传顺序。 */
+  sourceImageIndex: Map<string, number>
 }
 
 /**
@@ -20,11 +22,14 @@ export function buildItemEntries(
   items: VisionItem[],
   index: MatchIndex,
   settings: AppSettings,
+  imageIndexes?: readonly number[],
 ): BuildItemEntriesResult {
   const byKey = new Map<string, ItemEntry>()
   const unresolved: string[] = []
+  const sourceImageIndex = new Map<string, number>()
 
-  for (const visionItem of items) {
+  for (let position = 0; position < items.length; position += 1) {
+    const visionItem = items[position]
     const [best] = index.search(visionItem.name, 1)
     if (!best || best.score < SUGGEST_THRESHOLD) {
       unresolved.push(visionItem.name)
@@ -48,9 +53,10 @@ export function buildItemEntries(
       state: { status: 'loading' },
       source: 'vision',
     })
+    sourceImageIndex.set(key, imageIndexes?.[position] ?? 0)
   }
 
-  return { entries: [...byKey.values()], unresolved }
+  return { entries: [...byKey.values()], unresolved, sourceImageIndex }
 }
 
 export interface AddManualItemResult {
